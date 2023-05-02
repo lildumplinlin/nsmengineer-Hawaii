@@ -51,3 +51,7 @@ to create a  table: add pipes for each column, and enter for a new row.
         the dots before and after state that there is code before and after the block
     ...
 ```
+* to update notes: go to your actual terminal and type the following:
+    * `git add .`
+    * `git commit -m "___"`
+    * `git push`
