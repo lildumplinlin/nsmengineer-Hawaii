@@ -55,3 +55,6 @@ to create a  table: add pipes for each column, and enter for a new row.
     * `git add .`
     * `git commit -m "___"`
     * `git push`
+
+<!--to comment out a comment, use the greater than sign, bang, and two dashes and close out with two dashes and less than sign-->
+* to comment out a comment, use the <, !, and --, and close out with -- and >
