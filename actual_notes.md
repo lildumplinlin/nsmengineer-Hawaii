@@ -1,11 +1,12 @@
 # NSM Engineering Day 1
-1.  ***on Host machine*** to get containers started: 
+## Set up Containers
+1.  ***on STUDENT machine*** to get containers started: 
     * `lxc list` to list the containers
     * `lxc start --all` to start all containers
 > passwords for the container is `training`
 3. to disable ipv6, ***vi/vim*** into `/etc/sysctl.conf` and ensure that 1 is next to disable ipv6
 1. `ip a` to verify interfaces. Eth0 is management, eth1 is interfaces
-* ***SSH INTO MACHINES*** and configure the following: `sudo vi /etc/sysconfig/network-scripts/ifcfg-eth0`
+* ***SSH INTO EACH CONTAINER*** and configure the following: `sudo vi /etc/sysconfig/network-scripts/ifcfg-eth0`
     * ```
         DEVICE=eth0
         BOOTPROTO=none
@@ -129,14 +130,14 @@ PREFIX=24
 
 -->
 > in vi,`:%d` deletes the whole document
-* to restart the network, type `sudo systemctl restart network`
+5. `sudo systemctl restart network` for each machine
 >to ensure proper copy and paste format, right click for both, and make sure youre in insert mode
 
-* ssh-keygen
+6. ***IN STUDENT*** ssh-keygen
     * if it asks to overwrite in /home/ubuntu/.ssh/id_rsa, hit yes
     * use training as key
 
-* ***HOST*** into `~/.ssh/config` file, copy and paste this into the file: in student?
+7. `sudo vi ~/.ssh/config` file, copy and paste this into the file:
     * ```
         Host repo
             HostName repo
@@ -195,10 +196,11 @@ Host kibana
   HostName kibana
   User elastic
   -->
-* to recursively set ssh id key to each host in the container:`for host in sensor repo elastic{0..2} pipeline{0..2} kibana; do ssh-copy-id $host; done`
+8. to recursively set ssh id key to each host in the container:`for host in sensor repo elastic{0..2} pipeline{0..2} kibana; do ssh-copy-id $host; done`
 
 > if you cannot ssh into any of the containers, restart by doing `lxc restart --all`
-* on repo
+## Configure Repo
+9. ***on repo***
     1. `sudo yum install nginx` is a place that can store files through a web browser
 
     1. `unzip all-class-files.zip -d /usr/share/nginx/` 
@@ -324,7 +326,6 @@ mkdir ~/archive; sudo mv /etc/yum.repos.d/* ~/archive; sudo mv local.repo /etc/y
 
 * `for host in elastic{0..2} pipeline{0..2} kibana; do ssh -t elastic@$host 'sudo mkdir ~/archive ; sudo mv /etc/yum.repos.d/* ~/archive/' ; sudo scp /etc/yum.repos.d/local.repo elastic@$host:~/local.repo ; ssh -t elastic@$host 'sudo mv ~/local.repo /etc/yum.repos.d/local.repo ; sudo yum makecache fast' ; ll elastic@$host:~/archive ; ll elastic@$host:/etc/yum.repos.d ; done`
 
-training
 ---
 ### Securing Repo and FileShare
 * `mkdir` and `cd` into ~/certs
@@ -458,7 +459,6 @@ the second command, `scp /etc/yum.repos.d/local.repo elastic@$host:/etc/yum.repo
 * or use in repo `for host in elastic{0..2} pipeline{0..2} kibana sensor; do sudo scp ~/certs/localCA.crt elastic@$host:~/localCA.crt && ssh -t elastic@$host 'sudo mv ~/localCA.crt /etc/pki/ca-trust/source/anchors/ && sudo update-ca-trust'; done`
 
 
-
 ---
 ### Configure Capture Interfaces
 > eth0 is management and eth1 is going to be our capture interface
@@ -566,7 +566,9 @@ TYPE=Ethernet
 * watch ls -al /data/stenographer/packets/
 * sudo yum install suricata
 sudo -s
-y
+* in /etc/suricata/suricata.yaml
+
+/etc/stenographer/config
 ```
 line 56, data/suricata; 
 60, no; 
@@ -668,16 +670,16 @@ env_vars=fanout_id=77
 * sudo vi /etc/zeek/node.cfg 
 * sudo mkdir /usr/share/zeek/site/scripts
 * cd /usr/share/zeek/site/scripts/
-* sudo curl -LO -r https://repo/fileshare/zeek/
-* sudo curl -LO https://repo/fileshare/zeek/
 * url_base="https://repo/fileshare/zeek/"; files=("afpacket.zeek" "extension.zeek" "extract-files.zeek" "fsf.zeek" "json.zeek" "kafka.zeek"); for file in "${files[@]}"; do sudo curl -LO "${url_base}${file}"; done
 * cd /usr/share/zeek/site
 
 * add to local.zeek in /usr/zeek/site
-* @load ./scripts/afpacket.zeek
-* @load ./scripts/extension.zeek
+    ```
+    @load ./scripts/afpacket.zeek
+    @load ./scripts/extension.zeek
+    redef ignore_checksums = T;
 
-* redef ignore_checksums = T;
+
 * sudo mkdir -p /data/zeek
 * sudo chown -R zeek: /data/zeek
 * sudo chown -R zeek: /etc/zeek
@@ -692,12 +694,265 @@ env_vars=fanout_id=77
 * sudo -u zeek zeekctl deploy
 * sudo -u zeek zeekctl status
 * cd /data/zeek/current/ ; ll
-* sudo vi 
-    * server config change to "localhost"
-    * yara oatg "/var/lib/yara-rules/rules.yara
-    * pid payh /run/fsf/fsf.pid
-    * activelogging modules ['rockout']
-* sudo mkdir -p data/fsf/archive
+sudo -u zeek zeekctl start
+^start^stop
+^stop^status
+sudo yum install fsf
+* sudo vi /opt/fsf/fsf-server/conf/config.py
+    ```
+    #!/usr/bin/env python
+    #
+    # Basic configuration attributes for scanner. Used as default
+    # unless the user overrides them.
+    #
+
+    import socket
+
+    SCANNER_CONFIG = { 'LOG_PATH' : '/data/fsf',
+                    'YARA_PATH' : '/var/lib/yara-rules/rules.yara',
+                    'PID_PATH' : '/run/fsf/fsf.pid',
+                    'EXPORT_PATH' : '/data/fsf/archive',
+                    'TIMEOUT' : 60,
+                    'MAX_DEPTH' : 10,
+                    'ACTIVE_LOGGING_MODULES' : ['rockout'],
+                    }
+
+    SERVER_CONFIG = { 'IP_ADDRESS' : "localhost",
+                    'PORT' : 5800 }
+<!--
+#!/usr/bin/env python
+#
+# Basic configuration attributes for scanner. Used as default
+# unless the user overrides them.
+#
+
+import socket
+
+SCANNER_CONFIG = { 'LOG_PATH' : '/data/fsf',
+                   'YARA_PATH' : '/var/lib/yara-rules/rules.yara',
+                   'PID_PATH' : '/run/fsf/fsf.pid',
+                   'EXPORT_PATH' : '/data/fsf/archive',
+                   'TIMEOUT' : 60,
+                   'MAX_DEPTH' : 10,
+                   'ACTIVE_LOGGING_MODULES' : ['rockout'],
+                   }
+
+SERVER_CONFIG = { 'IP_ADDRESS' : "localhost",
+                  'PORT' : 5800 }
+-->
+> if you need to change the server config, make sure to change the ownership again and restart by doing `sudo chown -R fsf: /data/fsf ; sudo systemctl restart fsf`
 * sudo mkdir -p /data/fsf/archive ; sudo chown -R fsf: /data/fsf
-* sudo vi /opt/fsf/fsf-client/conf/config.py
-    * change ip address to localhost
+sudo systemctl enable fsf --now
+sudo vi into 
+@load ./scripts/json.zeek
+@load ./scripts/extract-files.zeek
+@load ./scripts/fsf.zeek
+@load ./scripts/kafka.zeek
+---
+* in pipeline0, 1, 2
+- sudo yum install kafka zookeeper
+- sudo mkdir -p /data/zookeeper ; sudo chown -R zookeeper: /data/zookeeper
+- sudo vi /etc/zookeeper/zoo.cfg
+    - ```
+        # where zookeeper will store its data
+        dataDir=/data/zookeeper
+
+        # what port should clients like kafka connect on
+        clientPort=2181
+
+        # how many clients should be allowed to connect, 0 = unlimited
+        maxClientCnxns=0
+
+        # list of zookeeper nodes to make up the cluster
+        # First port is how followers and leaders communicate
+        # Second port is used during the election process to determine a leader
+        server.1=pipeline0:2888:3888
+        server.2=pipeline1:2888:3888
+        server.3=pipeline2:2888:3888
+
+        # more than one zookeeper node will have a unique server id.
+        # Ex.) server.1, server.2, etc..
+
+        # milliseconds in which zookeeper should consider a single tick
+        tickTime=2000
+
+        # amount of ticks a follow has to connect and sync with the leader
+        initLimit=5
+
+        # amount of ticks a follower has to sync with a leader before being dropped
+        syncLimit=2
+        ```
+<!--
+# where zookeeper will store its data
+ dataDir=/data/zookeeper
+
+ # what port should clients like kafka connect on
+ clientPort=2181
+
+ # how many clients should be allowed to connect, 0 = unlimited
+ maxClientCnxns=0
+
+ # list of zookeeper nodes to make up the cluster
+ # First port is how followers and leaders communicate
+ # Second port is used during the election process to determine a leader
+ server.1=pipeline0:2888:3888
+ server.2=pipeline1:2888:3888
+ server.3=pipeline2:2888:3888
+
+ # more than one zookeeper node will have a unique server id.
+ # Ex.) server.1, server.2, etc..
+
+ # milliseconds in which zookeeper should consider a single tick
+ tickTime=2000
+
+ # amount of ticks a follow has to connect and sync with the leader
+ initLimit=5
+
+ # amount of ticks a follower has to sync with a leader before being dropped
+ syncLimit=2
+--->
+- sudo touch /data/zookeeper/myid ; sudo chown zookeeper: /data/zookeeper/myid
+- echo "#" | sudo tee /data/zookeeper/myid ; cat /data/zookeeper/myid
+    | pipeline0 | 1 |
+    |---|---|
+    | pipeline1 | 2 |
+    | pipeline2 | 3 |
+- sudo firewall-cmd --add-port={2181,2888,3888}/tcp --permanent
+- sudo firewall-cmd --reload
+
+***do not start zookeeper yet. must repeat the above on  the other machines***
+- sudo systemctl enable zookeeper --now
+- sudo systemctl status zookeeper
+on student box
+- for host in pipeline{0..2}; do (echo "stats" | nc $host 2181 -q 2); done
+- sudo mkdir -p /data/kafka ;sudo chown kafka: /data/kafka
+- sudo cp /etc/kafka/server{.properties,.properties.bk}    
+- sudo vi /etc/kafka/server.properties 
+    - ```
+        # The unique id of this broker should be different for each kafka node. Good practice is to match the kafka broker id to the zookeeper server id.
+        broker.id=0
+
+        # the port in wich kafka should use to communicate with other kafka clients
+        port=9092
+        # the hostname or IP address in which the server listens on
+        listeners=PLAINTEXT://pipeline0:9092
+
+        # hostname that will be advertised to producers and consumers
+        advertised.listeners=PLAINTEXT://pipeline0:9092
+
+        # number of threads used to send network responses
+        num.network.threads=3
+
+        # number of threads used to make I/O requests
+        num.io.threads=8
+        socket.send.buffer.bytes=102400
+        socket.receive.buffer.bytes=102400
+        socket.request.max.bytes=104857600
+
+        # where kafka should write its data to
+        log.dirs=/data/kafka
+
+        # how many partitions and replicas should be generated for topics that are created by other software
+        num.partitions=3
+        offsets.topic.replication.factor=3
+        transaction.state.log.replication.factor=3
+        transaction.state.log.min.isr=2
+        default.replication.factor = 3
+        min.insync.replicas = 2
+
+        # how many threads should be used for shutdown and start up
+        num.recovery.threads.per.data.dir=3
+
+        # how long should we retain logs in kafka
+        log.retention.hours=12
+        log.retention.bytes=90000000000
+
+        # max size of a single log file
+        log.segment.bytes=1073741824
+
+        # frequency in miliseconds to check if a log needs to be deleted
+        log.retention.check.interval.ms=300000
+        log.cleaner.enable=false
+
+        # will not allow a node to be elected leader if it is not in sync with other nodes. Prevents possible missing messages
+        unclean.leader.election.enable=false
+
+        # automatically create topics from external software
+        auto.create.topics.enable=false
+
+
+        # how to connect kafka to zookeeper
+        zookeeper.connect=pipeline0:2181,pipeline1:2181,pipeline2:2181
+        zookeeper.connection.timeout.ms=30000
+    - ***be sure to change the following for the other pipelines:***
+        | pipeline0 | 0 |
+        |---|---|
+        | pipeline1 | 1 |
+        | pipeline2 | 2 |
+
+        
+- sudo firewall-cmd --add-port=9092/tcp --permanent ; 
+- sudo firewall-cmd --reload
+- sudo systemctl enable kafka --now
+- sudo systemctl status kafka
+- sudo /usr/share/kafka/bin/kafka-topics.sh --bootstrap-server pipeline0:9092 --create --topic test --partitions 3 --replication-factor 3
+- sudo /usr/share/kafka/bin/kafka-topics.sh --bootstrap-server pipeline0:9092 --list
+- sudo /usr/share/kafka/bin/kafka-topics.sh --bootstrap-server pipeline0:9092 --describe --topic  test
+- to mark topic for deletion
+    - sudo /usr/share/kafka/bin/kafka-topics.sh --bootstrap-server pipeline0:9092 --delete --topic test
+- sudo /usr/share/kafka/bin/kafka-topics.sh --zookeeper pipeline0:2181 --create --topic zeek-raw --partitions 3 --replication-factor 3
+- sudo /usr/share/kafka/bin/kafka-topics.sh --zookeeper pipeline0:2181 --create --topic zeek-raw --partitions 3 --replication-factor 3
+
+- sudo /usr/share/kafka/bin/kafka-topics.sh --zookeeper pipeline0:2181 --create --topic zeek-raw --partitions 3 --replication-factor 3
+- ***on sensor*** sudo vi /usr/share/zeek/site/local.zeek
+- sudo vi kafka.zeek
+    - ```
+        @load Apache/Kafka/logs-to-kafka
+
+        redef Kafka::topic_name = "zeek-raw";
+        redef Kafka::json_timestamps = JSON::TS_ISO8601;
+        redef Kafka::tag_json = F;
+        redef Kafka::kafka_conf = table(
+            ["metadata.broker.list"] = "pipeline0:9092,pipeline1:9092,pipeline2:9092");
+
+        event zeek_init() &priority=-5
+        {
+            for (stream_id in Log::active_streams)
+            {
+                if (|Kafka::logs_to_send| == 0 || stream_id in Kafka::logs_to_send)
+                {
+                    local filter: Log::Filter = [
+                        $name = fmt("kafka-%s", stream_id),
+                        $writer = Log::WRITER_KAFKAWRITER,
+                        $config = table(["stream_id"] = fmt("%s", stream_id))
+                    ];
+
+                    Log::add_filter(stream_id, filter);
+                }
+            }
+
+<!-- 
+@load Apache/Kafka/logs-to-kafka
+
+redef Kafka::topic_name = "zeek-raw";
+redef Kafka::json_timestamps = JSON::TS_ISO8601;
+redef Kafka::tag_json = F;
+redef Kafka::kafka_conf = table(
+    ["metadata.broker.list"] = "pipeline0:9092,pipeline1:9092,pipeline2:9092");
+
+event zeek_init() &priority=-5
+{
+    for (stream_id in Log::active_streams)
+    {
+        if (|Kafka::logs_to_send| == 0 || stream_id in Kafka::logs_to_send)
+        {
+            local filter: Log::Filter = [
+                $name = fmt("kafka-%s", stream_id),
+                $writer = Log::WRITER_KAFKAWRITER,
+                $config = table(["stream_id"] = fmt("%s", stream_id))
+            ];
+
+            Log::add_filter(stream_id, filter);
+        }
+    }
+-->
