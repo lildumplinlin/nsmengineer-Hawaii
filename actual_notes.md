@@ -956,3 +956,177 @@ event zeek_init() &priority=-5
         }
     }
 -->
+---
+> to test for traffic: curl google.com 
+## FileBeat
+***ON SENSOR*** 
+1. sudo yum install filebeat
+2. sudo mv /etc/filebeat/filebeat{.yml,.yml.bk}
+1. cd /etc/filebeat
+1. sudo curl -LO https://repo/fileshare/filebeat/filebeat.yml
+1. sudo vi filebeat.yml
+
+***in pipeline0*** 
+1. sudo /usr/share/kafka/bin/kafka-topics.sh --list --zookeeper pipeline0:2181
+    * lists topics
+1. sudo /usr/share/kafka/bin/kafka-topics.sh --create --zookeeper pipeline0:2181 --replication-factor 3 --partitions 3 --topic fsf-raw
+1. sudo /usr/share/kafka/bin/kafka-topics.sh --create --zookeeper pipeline0:2181 --replication-factor 3 --partitions 3 --topic suricata-raw
+
+***ON SENSOR*** 
+
+1. sudo systemctl start filebeat
+1. Verify messages are added to suricata-raw
+`sudo /usr/share/kafka/bin/kafka-console-consumer.sh --bootstrap-server pipeline0:9092 --topic suricata-raw --from-beginning`
+
+1. Verify messages are added to fsf-raw
+`sudo /usr/share/kafka/bin/kafka-console-consumer.sh --bootstrap-server pipeline0:9092 --topic fsf-raw --from-beginning`
+
+***on elastic0***
+
+1. sudo yum install elasticsearch -y
+2. sudo mv /etc/elasticsearch/elasticsearch{.yml,.yml.bk}
+1. sudo curl -LO https://repo/fileshare/elasticsearch/elasticsearch.yml
+
+*for a single node*
+
+2. make sure you're in the home directory and sudo vi elasticsearch.yml
+    * ```
+      cluster.name:  nsm-cluster
+      node.name:  es-node-0
+      path.data: /data/elasticsearch
+      path.logs: /var/log/elasticsearch
+      bootstrap.memory_lock: true
+      network.host: _local:ipv4_
+      http.port:9200
+      discovery.type: single-node
+
+*for multinode*
+
+2. make sure you're in the home directory and sudo vi elasticsearch.yml
+    * ```
+        cluster.name:  nsm-cluster
+        node.name:  es-node-0
+        path.data: /data/elasticsearch
+        path.logs: /var/log/elasticsearch
+        bootstrap.memory_lock: true
+        network.host: _site:ipv4_
+        http.port:9200
+        discovery.seed_hosts: ["elastic0","elastic1","elastic2"]
+        cluster.initial_master_nodes: ["es-node-0","es-node-1","es-node-2"]
+    * be syure to change the node name!!
+<!--
+cluster.name: nsm-cluster
+node.name: es-node-0
+path.data: /data/elasticsearch
+path.logs: /var/log/elasticsearch
+bootstrap.memory_lock: true
+network.host: _site:ipv4_
+http.port:9200
+discovery.seed_hosts: ["elastic0","elastic1","elastic2"]
+cluster.initial_master_nodes: ["es-node-0","es-node-1","es-node-2"]
+
+cluster.name: nsm-cluster
+node.name: es-node-1
+path.data: /data/elasticsearch
+path.logs: /var/log/elasticsearch
+bootstrap.memory_lock: true
+network.host: _site:ipv4_
+http.port: 9200
+discovery.type: single-node
+
+-->
+> if you created the single node first, be sure to cd into the new folder it was moved to before, and change the ownership again
+
+1. sudo mv ~/elasticsearch.yml /etc/elasticsearch ; sudo chmod 640 /etc/elasticsearch/elasticsearch.yml
+1. sudo mkdir /usr/lib/systemd/system/elasticsearch.service.d ; sudo chmod 755 /usr/lib/systemd/system/elasticsearch.service.d
+1. sudo vi /usr/lib/systemd/system/elasticsearch.service.d/override.conf
+    * ```
+        [Service]
+        LimitMEMLOCK=infinity
+<!-- 
+[Service]
+LimitMEMLOCK=infinity
+-->
+1. sudo chmod 644 /usr/lib/systemd/system/elasticsearch.service.d/override.conf
+1. sudo vi /etc/elasticsearch/jvm.options.d/jvm_override.conf
+    * ```
+        -Xms2g
+        -Xmx2g
+<!-- 
+-Xms2g
+-Xmx2g
+-->
+1. sudo mkdir -p /data/elasticsearch ; sudo chown elasticsearch: /data/elasticsearch ; sudo chmod 755 /data/elasticsearch/
+1. sudo firewall-cmd --add-port={9200,9300}/tcp --permanent ; sudo firewall-cmd --reload
+---
+## Kibana
+***on kibana machine***
+1. sudo yum install kibana -y
+2. sudo mv /etc/kibana/kibana{.yml,.yml.bk}
+3. sudo vi /etc/kibana/kibana.yml
+    * ```
+        server.port: 5601
+        server.host: localhost
+        server.name: kibana
+        elasticsearch.hosts: ["http://elastic0:9200","http://elastic1:9200","http://elastic2:9200"]
+
+<!-- 
+server.port: 5601
+server.host: localhost
+server.name: kibana
+elasticsearch.hosts: ["https://elastic0:9200","https://elastic1:9200","https://elastic2:9200"]
+-->
+4. sudo yum install nginx -y
+5. sudo vi /etc/nginx/conf.d/kibana.conf
+    * ```
+        server {
+        listen 80;
+        server_name kibana;
+        proxy_max_temp_file_size 0;
+
+        location / {
+            proxy_pass http://127.0.0.1:5601/;
+
+            proxy_redirect off;
+            proxy_buffering off;
+
+            proxy_http_version 1.1;
+            proxy_set_header Connection "Keep-Alive";
+            proxy_set_header Proxy-Connection "Keep-Alive";
+
+        }
+
+        }
+<!-- 
+server {
+  listen 80;
+  server_name kibana;
+  proxy_max_temp_file_size 0;
+
+  location / {
+    proxy_pass http://127.0.0.1:5601/;
+
+    proxy_redirect off;
+    proxy_buffering off;
+
+    proxy_http_version 1.1;
+    proxy_set_header Connection "Keep-Alive";
+    proxy_set_header Proxy-Connection "Keep-Alive";
+
+  }
+
+}
+-->
+6. sudo vi /etc/nginx/nginx.conf
+    * comment out lines 39-41
+
+7. sudo systemctl enable nginx --now ; sudo systemctl enable kibana --now
+1. sudo systemctl status nginx ; sudo systemctl status kibana
+1. sudo firewall-cmd --add-port=80/tcp --permanent ; sudo firewall-cmd --reload
+1. sudo curl -LO https://repo/fileshare/kibana/ecskibana.tar.gz
+1. sudo mv ecskibana.tar.gz ~
+1. cd ~ ; tar -zxvf ecskibana.tar.gz 
+1. sudo yum install jq -y
+1. cd ecskibana
+1. sudo ./import-index-templates.sh http://elastic0:9200
+
